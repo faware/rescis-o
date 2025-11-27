@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calculadora de Rescisão</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    body{max-width:980px;margin:28px auto;padding:18px;border-radius:12px;background:#f7f7fb;color:#111}
+    h1{font-size:1.4rem;margin-bottom:8px}
+    .card{background:white;padding:16px;border-radius:10px;box-shadow:0 6px 18px rgba(18,18,20,.06)}
+    label{display:block;margin-top:12px;font-weight:600}
+    input,select{width:100%;padding:8px;border-radius:8px;border:1px solid #ddd;margin-top:6px}
+    .row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .actions{display:flex;gap:8px;margin-top:12px}
+    button{padding:10px 14px;border-radius:8px;border:0;background:#0066cc;color:white;cursor:pointer}
+    button.secondary{background:#6c757d}
+    .result{margin-top:16px}
+    .line{display:flex;justify-content:space-between;padding:8px 6px;border-bottom:1px dashed #eee}
+    .muted{color:#666;font-size:.9rem}
+    footer{margin-top:18px;font-size:.85rem;color:#444}
+    @media(max-width:640px){.row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Calculadora de Rescisão (estimativa)</h1>
+    <p class="muted">Insira os dados abaixo. Este é um cálculo aproximado para ajudar no planejamento — para valores oficiais consulte um contador ou advogado trabalhista.</p>
+
+    <label>Salário (R$)</label>
+    <input id="salary" placeholder="Ex: 2500,00" />
+
+    <div class="row">
+      <div>
+        <label>Data de admissão</label>
+        <input type="date" id="startDate" />
+      </div>
+      <div>
+        <label>Data de desligamento</label>
+        <input type="date" id="endDate" />
+      </div>
+    </div>
+
+    <label>Tipo de rescisão</label>
+    <select id="type">
+      <option value="semJusta">Demissão sem justa causa</option>
+      <option value="comJusta">Demissão por justa causa</option>
+      <option value="pedido">Pedido de demissão</option>
+      <option value="rescisaoConsensual">Rescisão consensual</option>
+    </select>
+
+    <label>Aviso prévio (dias) — preencha se indenizado</label>
+    <input id="avisoDias" placeholder="Ex: 0 (zero) ou 30" />
+
+    <label>Férias vencidas (dias) — se houver</label>
+    <input id="feriasVencidas" placeholder="Ex: 0 ou 30" />
+
+    <div class="actions">
+      <button id="calcBtn">Calcular</button>
+      <button class="secondary" id="resetBtn" type="button">Limpar</button>
+    </div>
+
+    <div class="result" id="result" aria-live="polite"></div>
+
+    <footer>
+      <strong>Atenção:</strong> Este cálculo usa aproximações (ex.: FGTS calculado como 8% do salário por mês trabalhado; multa de 40% sobre o FGTS somente para demissão sem justa causa). Não substitui cálculo oficial.
+    </footer>
+  </div>
+
+  <script>
+    // util
+    function toNumber(str){
+      if(!str) return 0;
+      // aceita vírgula ou ponto
+      str = String(str).trim().replace(/\./g,'').replace(',','.');
+      const n = parseFloat(str);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function monthsBetween(d1,d2){
+      // retorna número aproximado de meses completos entre as datas
+      const y1=d1.getFullYear(), m1=d1.getMonth(), day1=d1.getDate();
+      const y2=d2.getFullYear(), m2=d2.getMonth(), day2=d2.getDate();
+      let months = (y2 - y1) * 12 + (m2 - m1);
+      // conta mês adicional se o dia do desligamento for >= dia admissão
+      if(day2 >= day1) months += 1;
+      return Math.max(0, months);
+    }
+
+    function daysBetween(d1,d2){
+      const ms = 24*60*60*1000;
+      return Math.max(0, Math.round((d2 - d1)/ms));
+    }
+
+    function formatReal(v){
+      return v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+    }
+
+    document.getElementById('calcBtn').addEventListener('click', ()=>{
+      const salary = toNumber(document.getElementById('salary').value);
+      const start = document.getElementById('startDate').valueAsDate;
+      const end = document.getElementById('endDate').valueAsDate;
+      const type = document.getElementById('type').value;
+      const avisoDias = parseInt(document.getElementById('avisoDias').value) || 0;
+      const feriasVencidasDias = parseInt(document.getElementById('feriasVencidas').value) || 0;
+      const out = document.getElementById('result');
+      out.innerHTML='';
+
+      if(!salary || !start || !end){
+        out.innerHTML = '<div class="line">Preencha salário, admissão e desligamento.</div>';
+        return;
+      }
+      if(end < start){
+        out.innerHTML = '<div class="line">Data de desligamento menor que admissão.</div>';
+        return;
+      }
+
+      // tempo de trabalho
+      const diasTrabalhados = daysBetween(start,end);
+      const meses = monthsBetween(start,end);
+
+      // salário proporcional (meses incompletos calculados por dias/30)
+      const dayOfMonthStart = start.getDate();
+      const dayOfMonthEnd = end.getDate();
+      // Proporcional de salário: (dias no mês de desligamento / 30) * salário
+      const diasNoMesDeslig = dayOfMonthEnd; // simplificação
+      const salarioProporcional = (diasNoMesDeslig/30) * salary;
+
+      // aviso prévio indenizado
+      const avisoIndenizado = (avisoDias>0) ? (avisoDias/30)*salary : 0;
+
+      // férias proporcionais = (meses completos no período / 12) * salário + 1/3
+      const feriasProporcionais = (meses/12) * salary;
+      const feriasVencidas = (feriasVencidasDias/30) * salary; // se tiver férias vencidas
+      const adicionalUmTerco = (feriasProporcionais + feriasVencidas) / 3;
+
+      // 13º proporcional: meses trabalhados no ano do desligamento
+      // calculamos meses no ano corrente: de jan ou admissão até desligamento
+      const startOfYear = new Date(end.getFullYear(),0,1);
+      const startCounting = (start > startOfYear) ? start : startOfYear;
+      const mesesAno = monthsBetween(startCounting,end);
+      const decimoProporcional = (mesesAno/12) * salary;
+
+      // FGTS aproximado: 8% do salário * meses trabalhados (inclui mês em que saiu)
+      const fgtsBase = salary * meses * 0.08;
+      // multa de 40% apenas para demissão sem justa causa
+      const multaFGTS = (type === 'semJusta') ? fgtsBase * 0.4 : 0;
+
+      // Resumo bruto
+      const bruto = salarioProporcional + avisoIndenizado + feriasProporcionais + feriasVencidas + adicionalUmTerco + decimoProporcional + multaFGTS;
+
+      // Observação: descontos (INSS, IR) não foram calculados — é complexa e depende de tabela e recolhimentos.
+
+      // Montar HTML do resultado
+      const rows = [];
+      rows.push({k:'Salário proporcional', v:salarioProporcional});
+      if(avisoIndenizado>0) rows.push({k:`Aviso prévio indenizado (${avisoDias} dias)`, v:avisoIndenizado});
+      if(feriasVencidas>0) rows.push({k:'Férias vencidas', v:feriasVencidas});
+      rows.push({k:'Férias proporcionais', v:feriasProporcionais});
+      rows.push({k:'Adicional 1/3 sobre férias', v:adicionalUmTerco});
+      rows.push({k:'13º proporcional', v:decimoProporcional});
+      rows.push({k:'FGTS (estimado 8% x meses)', v:fgtsBase});
+      if(multaFGTS>0) rows.push({k:'Multa FGTS (40%)', v:multaFGTS});
+
+      let html = '<div class="card"><h2>Resumo</h2>';
+      rows.forEach(r=>{
+        html += `<div class="line"><div>${r.k}</div><div>${formatReal(r.v)}</div></div>`;
+      });
+      html += `<div class="line" style="font-weight:700"><div>Total bruto estimado</div><div>${formatReal(bruto)}</div></div>`;
+      html += `<p class="muted">Tempo de trabalho: ${Math.floor(diasTrabalhados/365)} ano(s) e ${Math.floor((diasTrabalhados%365)/30)} mês(es) (${meses} meses contados aprox.).</p>`;
+      html += `<p class="muted">Observação: descontos (INSS, IR, contribuições) não foram aplicados. Para cálculo oficial consulte contador ou auditor trabalhista.</p>`;
+      html += '</div>';
+
+      out.innerHTML = html;
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', ()=>{
+      document.getElementById('salary').value='';
+      document.getElementById('startDate').value='';
+      document.getElementById('endDate').value='';
+      document.getElementById('avisoDias').value='';
+      document.getElementById('feriasVencidas').value='';
+      document.getElementById('result').innerHTML='';
+    });
+  </script>
+</body>
+</html>
