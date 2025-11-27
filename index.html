@@ -52,6 +52,12 @@
     <label>Aviso prévio (dias) — preencha se indenizado</label>
     <input id="avisoDias" placeholder="Ex: 0 (zero) ou 30" />
 
+    <label>Férias vencidas (dias)</label>
+    <input id="feriasVencidas" placeholder="Ex: 0 ou 30" />
+
+    <label>13º salário vencido (meses)</label>
+    <input id="decimoVencido" placeholder="Ex: 0 ou 12" />
+
     <label>Férias vencidas (dias) — se houver</label>
     <input id="feriasVencidas" placeholder="Ex: 0 ou 30" />
 
@@ -139,6 +145,11 @@
       const startOfYear = new Date(end.getFullYear(),0,1);
       const startCounting = (start > startOfYear) ? start : startOfYear;
       const mesesAno = monthsBetween(startCounting,end);
+      // 13º vencido
+      const decimoVencidoMeses = parseInt(document.getElementById('decimoVencido').value) || 0;
+      const decimoVencido = (decimoVencidoMeses/12) * salary;
+
+      // 13º proporcional: meses trabalhados no ano do desligamento
       const decimoProporcional = (mesesAno/12) * salary;
 
       // FGTS aproximado: 8% do salário * meses trabalhados (inclui mês em que saiu)
@@ -147,7 +158,7 @@
       const multaFGTS = (type === 'semJusta') ? fgtsBase * 0.4 : 0;
 
       // Resumo bruto
-      const bruto = salarioProporcional + avisoIndenizado + feriasProporcionais + feriasVencidas + adicionalUmTerco + decimoProporcional + multaFGTS;
+      const bruto = salarioProporcional + avisoIndenizado + feriasProporcionais + feriasVencidas + adicionalUmTerco + decimoProporcional + decimoVencido + multaFGTS; salarioProporcional + avisoIndenizado + feriasProporcionais + feriasVencidas + adicionalUmTerco + decimoProporcional + multaFGTS;
 
       // Observação: descontos (INSS, IR) não foram calculados — é complexa e depende de tabela e recolhimentos.
 
@@ -158,6 +169,7 @@
       if(feriasVencidas>0) rows.push({k:'Férias vencidas', v:feriasVencidas});
       rows.push({k:'Férias proporcionais', v:feriasProporcionais});
       rows.push({k:'Adicional 1/3 sobre férias', v:adicionalUmTerco});
+      if(decimoVencido>0) rows.push({k:'13º vencido', v:decimoVencido});
       rows.push({k:'13º proporcional', v:decimoProporcional});
       rows.push({k:'FGTS (estimado 8% x meses)', v:fgtsBase});
       if(multaFGTS>0) rows.push({k:'Multa FGTS (40%)', v:multaFGTS});
